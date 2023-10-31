@@ -1,5 +1,6 @@
 use async_nats::{header::NATS_MESSAGE_ID, HeaderMap};
 use queue_test::{nats_stream, CustomData};
+use rand::seq::SliceRandom;
 use serde_json::json;
 
 #[tokio::main]
@@ -17,15 +18,19 @@ async fn main() {
         // * Crucial if you want to avoid duplicated messages to be sent for the given `duplicate window`
         let mut map: HeaderMap = HeaderMap::new();
 
-        map.insert(NATS_MESSAGE_ID, i.to_string().as_str());
+        map.insert(NATS_MESSAGE_ID, (i.to_string() + "so").as_str());
 
+        let selected_subject = ["events.email.1", "events.sms.2", "events.somethingelse"]
+            .choose(&mut rand::thread_rng())
+            .unwrap()
+            .to_string();
+        println!("selected subject: {}", selected_subject);
         let a = context
-            .publish_with_headers("events".to_string(), map, bytes.into())
+            .publish_with_headers(selected_subject, map, bytes.into())
             .await
             .unwrap();
 
-        let a = a.await.unwrap();
-        println!("{}", a.sequence)
+        let a = a.await.map_err(|err| println!("{}", err));
     }
 
     println!("Send a message!")

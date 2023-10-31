@@ -1,13 +1,15 @@
 use async_nats::jetstream::consumer::pull::Config;
 use async_nats::jetstream::consumer::Consumer;
-use async_nats::jetstream::consumer::DeliverPolicy;
+
 use futures::TryStreamExt;
+
+use rand::seq::SliceRandom;
+use serde_json::Value;
 
 use std::sync::OnceLock;
 use std::time::Duration;
 
 use queue_test::nats_stream;
-use queue_test::CustomData;
 
 pub async fn nats_consumer() -> &'static Consumer<Config> {
     static NATS_CLIENT: OnceLock<Consumer<Config>> = OnceLock::new();
@@ -18,26 +20,33 @@ pub async fn nats_consumer() -> &'static Consumer<Config> {
      * so it can guarantee `exactly once` semantic.
      */
     let stream = context
-        .get_or_create_stream(async_nats::jetstream::stream::Config {
+        .create_stream(async_nats::jetstream::stream::Config {
             name: "events".to_string(),
-            max_messages: 10_000,
-            duplicate_window: Duration::from_secs(30),
+            retention: async_nats::jetstream::stream::RetentionPolicy::WorkQueue,
+            duplicate_window: Duration::from_secs(60),
+            subjects: vec!["events.>".to_string()],
             ..Default::default()
         })
         .await
         .unwrap();
 
-    /*
-     * `deliver_policy: DeliverPolicy::New` doesn't mean that the consumer will consume messages that are sent to server
-     * only after it's `connected` to server. Rather, it means only after it's `created`.
-     * So, it still keeps track of messages
-     */
+    let consumer_name = ["consumer-2", "consumer-1"]
+        .choose(&mut rand::thread_rng())
+        .unwrap();
+
+    let mut filter_subject = "".to_string();
+    if *consumer_name == "consumer-1" {
+        filter_subject += "events.email.1"
+    } else {
+        filter_subject += "events.sms.2"
+    }
+
     let consumer = stream
         .get_or_create_consumer(
-            "consumer",
+            consumer_name,
             async_nats::jetstream::consumer::pull::Config {
-                durable_name: Some("consumer".to_string()),
-                deliver_policy: DeliverPolicy::New,
+                durable_name: Some(consumer_name.to_string()),
+                filter_subject,
                 ..Default::default()
             },
         )
@@ -55,18 +64,16 @@ async fn main() {
     while let Ok(Some(message)) = messages.try_next().await {
         // Deserialize the message payload into a Payload value.
         // let payload: Payload = serde_json::from_slice(message.payload.as_ref())?;
-        if let Ok(payload) = serde_json::from_slice::<CustomData>(&message.payload) {
-            println!(
-                "received payload: name={:?} age={:?}",
-                payload.name, payload.age
-            );
 
-            message.double_ack().await.unwrap();
+        println!("{}", message.message.subject);
+        if let Ok(payload) = serde_json::from_slice::<Value>(&message.payload) {
+            use rand::seq::SliceRandom;
+
+            if ![true, false].choose(&mut rand::thread_rng()).unwrap() {
+                message.double_ack().await.unwrap();
+                println!("received payload: {:?}", payload,);
+            }
         }
+        // println!("{:?}", message)
     }
 }
-
-// TODO Consume event
-// TODO See if it's okay for consumer to be disconnected (done)
-// TODO See if consumers are grouped together with the same `durable_name` (done)
-// TODO See if when consumers are disconnected and turn back on track, it consumes the message from the point it left off(done.)

@@ -11,6 +11,7 @@ futures = "*"
 tokio = { version = "*", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
 serde = {version="*",features=["derive"]}
 serde_json = "*"
+rand= "*"
 
 [[bin]]
 name = "p"
@@ -18,4 +19,11 @@ path = "./src/bin/publisher/main.rs"
 
 [[bin]]
 name = "c"
-path = "./src/bin/consumer/main.rs"
+path = "./src/bin/pull_consumer/main.rs"
+
+
+
+[[bin]]
+name = "wc"
+path = "./src/bin/work_queue_consumer/main.rs"
+

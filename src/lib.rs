@@ -4,10 +4,16 @@ use async_nats::jetstream::Context;
 use serde::{Deserialize, Serialize};
 
 // Test Data that's to be serialized and deserialized
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CustomData {
     pub name: String,
     pub age: i32,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UserAccountCreated {
+    pub(crate) id: String,
+    pub(crate) user_name: String,
+    pub(crate) jwt_token: String,
 }
 
 // Minimal client implementation
